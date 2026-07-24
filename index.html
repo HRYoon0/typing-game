@@ -135,7 +135,8 @@
   </div>
   <div id="wordEditor">
     <textarea id="customWordsInput" placeholder="단어를 쉼표나 줄바꿈으로 구분해 입력하세요&#10;예) 광합성, 증산작용, 잎맥, 뿌리털"></textarea>
-    <small>선생님이 수업 개념 단어를 넣어두면 학생들이 '내 단어장' 모드로 연습할 수 있어요.</small>
+    <small>선생님이 수업 개념 단어를 넣어두면 학생들이 '내 단어장' 모드로 연습할 수 있어요.<br>
+    <b>띄어쓰기가 있는 문장</b>을 넣으면 보스 전투 문장이 됩니다. (예: 식물은 빛으로 양분을 만든다)</small>
     <div class="btn-row">
       <button class="btn sub" id="templateBtn">엑셀 템플릿 받기</button>
       <button class="btn sub" id="uploadBtn">엑셀 업로드</button>
@@ -313,7 +314,7 @@ const WordBank = {
             'airplane','alphabet','birthday','broccoli','butterfly','calendar','chocolate','computer','crocodile','dinosaur','elephant','favorite','festival','homework','hospital','kangaroo','keyboard','ladybug','lighthouse','medicine','pineapple','playground','rectangle','scientist','spaceship','submarine','sunflower','telephone','telescope','tomorrow','treasure','vegetable','waterfall','watermelon','wonderful','basketball','dragonfly',
             'bicycle','breakfast','children','classroom','firefighter','goldfish','grandma','grandpa','holiday','lettuce','lunchbox','mermaid','mushroom','necklace','octopus','penguin','picture','princess','question','sailboat','seashell','seaweed','shoulder','snowball','starfish','swimming','toothbrush','weekend','whistle','windmill']
   },
-  custom: { short: [], long: [] },
+  custom: { short: [], long: [], sentences: [] },
 
   // 보스 문장 (어절 단위로 쪼개 순서대로 타이핑)
   sentences: {
@@ -326,9 +327,13 @@ const WordBank = {
   },
 
   pickSentence(mode) {
+    // 커스텀 모드: 선생님이 넣은 문장(띄어쓰기 포함 항목)이 있으면 우선 사용
+    if (mode === 'custom' && this.custom.sentences.length) {
+      return this.custom.sentences[Math.floor(Math.random() * this.custom.sentences.length)];
+    }
     const pool = this.sentences[mode];
     if (pool) return pool[Math.floor(Math.random() * pool.length)];
-    // 커스텀 모드: 단어장에서 4개를 이어 문장처럼 사용
+    // 문장이 없으면 단어장에서 4개를 이어 문장처럼 사용
     return this.pickDistinct('custom', 4).join(' ');
   },
 
@@ -336,12 +341,15 @@ const WordBank = {
 
   loadCustom(source) {
     const raw = source ?? this.linkWords ?? localStorage.getItem('typingGameWords') ?? '';
-    const words = raw.split(/[,\n]/).map(w => w.trim()).filter(Boolean);
+    const entries = raw.split(/[,\n]/).map(w => w.trim()).filter(Boolean);
+    // 띄어쓰기 포함 항목 = 보스 문장, 나머지 = 일반 단어
+    this.custom.sentences = entries.filter(w => w.includes(' '));
+    const words = entries.filter(w => !w.includes(' '));
     this.custom.short = words.filter(w => Hangul.decompose(w).length <= 6);
     this.custom.long  = words.filter(w => Hangul.decompose(w).length > 6);
     if (!this.custom.short.length) this.custom.short = words;
     if (!this.custom.long.length)  this.custom.long  = words;
-    return words.length > 0;
+    return words.length > 0;   // 단어(문장 제외)가 있어야 게임 진행 가능
   },
 
   // 서로 접두사 관계가 아닌 단어 n개 뽑기 (카드 선택 단어용)
@@ -2086,7 +2094,9 @@ document.getElementById('templateBtn').addEventListener('click', async () => {
   try {
     await loadSheetJS();
     const ws = XLSX.utils.aoa_to_sheet([['단어'], ['광합성'], ['증산작용'], ['잎맥'], ['뿌리털'],
-      ['(위 예시를 지우고 단어를 한 줄에 하나씩 적어 주세요)']]);
+      ['식물은 빛으로 양분을 만든다'],
+      ['(위 예시를 지우고 단어를 한 줄에 하나씩 적어 주세요)'],
+      ['(띄어쓰기가 있는 문장을 넣으면 보스 전투 문장이 됩니다)']]);
     ws['!cols'] = [{ wch: 40 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '단어장');
@@ -2118,9 +2128,10 @@ document.getElementById('excelFile').addEventListener('change', async e => {
 
 document.getElementById('linkBtn').addEventListener('click', () => {
   const raw = customWordsInput.value.trim();
-  const words = raw.split(/[,\n]/).map(w => w.trim()).filter(Boolean);
-  if (words.length < 3) { alert('단어를 3개 이상 입력해 주세요!'); return; }
-  const url = location.origin + location.pathname + '#w=' + WordLink.encode(words.join(','));
+  const entries = raw.split(/[,\n]/).map(w => w.trim()).filter(Boolean);
+  const wordCount = entries.filter(w => !w.includes(' ')).length;   // 문장 제외 단어 수
+  if (wordCount < 3) { alert('단어(문장 제외)를 3개 이상 입력해 주세요!'); return; }
+  const url = location.origin + location.pathname + '#w=' + WordLink.encode(entries.join(','));
   const out = document.getElementById('linkOut');
   out.style.display = 'block';
   out.value = url;
