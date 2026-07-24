@@ -14,6 +14,7 @@
     --sub: #8b8880;
     --line: #d6d2c8;
     --accent: #a04a4a;     /* 버건디 포인트 */
+    --accent2: #4e6e8e;    /* 청회색 (영어 모드) */
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
@@ -50,6 +51,9 @@
     border: 1.5px solid var(--line);
   }
   .btn.sub:hover { background: var(--panel); border-color: var(--sub); }
+  .btn.en { background: var(--accent2); }
+  .btn.en:hover { background: #3f5c78; }
+  .btn.mini { padding: 6px 12px; font-size: 13px; border-radius: 3px; }
   .btn.diff { padding: 9px 22px; font-size: 15px; }
   .btn.diff.active { border-color: var(--accent); color: var(--accent); background: var(--panel); }
 
@@ -128,21 +132,25 @@
   </div>
   <div class="btn-row">
     <button class="btn primary" data-mode="ko">한글 낱말</button>
-    <button class="btn" data-mode="en">영어 단어</button>
+    <button class="btn en" data-mode="en">영어 단어</button>
     <button class="btn" data-mode="custom">내 단어장</button>
     <button class="btn sub" id="editBtn">단어장 만들기</button>
     <button class="btn sub" id="soundBtn">효과음: 켬</button>
   </div>
   <div id="wordEditor">
+    <input id="setName" placeholder="단어장 이름 (예: 3단원 식물의 구조)"
+           style="width:100%; font-family:inherit; font-size:15px; font-weight:600; color:var(--ink);
+                  background:var(--panel); border:1.5px solid var(--line); border-radius:4px; padding:10px 12px;">
     <textarea id="customWordsInput" placeholder="단어를 쉼표나 줄바꿈으로 구분해 입력하세요&#10;예) 광합성, 증산작용, 잎맥, 뿌리털"></textarea>
     <small>선생님이 수업 개념 단어를 넣어두면 학생들이 '내 단어장' 모드로 연습할 수 있어요.<br>
     <b>띄어쓰기가 있는 문장</b>을 넣으면 보스 전투 문장이 됩니다. (예: 식물은 빛으로 양분을 만든다)</small>
     <div class="btn-row">
       <button class="btn sub" id="templateBtn">엑셀 템플릿 받기</button>
       <button class="btn sub" id="uploadBtn">엑셀 업로드</button>
-      <button class="btn sub" id="saveWordsBtn">이 컴퓨터에 저장</button>
+      <button class="btn sub" id="saveWordsBtn">단어장 저장</button>
       <button class="btn primary" id="linkBtn">학생용 링크 만들기</button>
     </div>
+    <div id="setList" style="display:flex; flex-direction:column; gap:6px;"></div>
     <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" style="display:none;">
     <input id="linkOut" readonly placeholder="링크가 여기에 표시됩니다"
            style="display:none; width:100%; font-family:inherit; font-size:13px; color:var(--ink);
@@ -2128,16 +2136,9 @@ document.getElementById('excelFile').addEventListener('change', async e => {
 
 document.getElementById('linkBtn').addEventListener('click', () => {
   const raw = customWordsInput.value.trim();
-  const entries = raw.split(/[,\n]/).map(w => w.trim()).filter(Boolean);
-  const wordCount = entries.filter(w => !w.includes(' ')).length;   // 문장 제외 단어 수
+  const wordCount = raw.split(/[,\n]/).map(w => w.trim()).filter(w => w && !w.includes(' ')).length;
   if (wordCount < 3) { alert('단어(문장 제외)를 3개 이상 입력해 주세요!'); return; }
-  const url = location.origin + location.pathname + '#w=' + WordLink.encode(entries.join(','));
-  const out = document.getElementById('linkOut');
-  out.style.display = 'block';
-  out.value = url;
-  document.getElementById('linkHint').style.display = 'block';
-  out.focus(); out.select();
-  try { navigator.clipboard.writeText(url); } catch (e) { /* 선택된 상태라 수동 복사 가능 */ }
+  showLink(buildLink(raw));
 });
 
 const soundBtn = document.getElementById('soundBtn');
@@ -2146,15 +2147,87 @@ soundBtn.addEventListener('click', () => {
   soundBtn.textContent = `효과음: ${Sound.toggle() ? '켬' : '끔'}`;
 });
 
+// ── 여러 단어장 저장/관리 ──
+const WordSets = {
+  load() {
+    try { return JSON.parse(localStorage.getItem('typingGameWordSets')) || []; }
+    catch (e) { return []; }
+  },
+  save(sets) { localStorage.setItem('typingGameWordSets', JSON.stringify(sets)); },
+  // 예전 단일 저장 방식에서 이전
+  migrate() {
+    const legacy = localStorage.getItem('typingGameWords');
+    if (legacy && !this.load().length) this.save([{ name: '기본 단어장', words: legacy }]);
+  }
+};
+WordSets.migrate();
+
+function buildLink(raw) {
+  const entries = raw.split(/[,\n]/).map(w => w.trim()).filter(Boolean);
+  return location.origin + location.pathname + '#w=' + WordLink.encode(entries.join(','));
+}
+
+function showLink(url) {
+  const out = document.getElementById('linkOut');
+  out.style.display = 'block';
+  out.value = url;
+  document.getElementById('linkHint').style.display = 'block';
+  out.focus(); out.select();
+  try { navigator.clipboard.writeText(url); } catch (e) { /* 선택된 상태라 수동 복사 가능 */ }
+}
+
+function renderSetList() {
+  const wrap = document.getElementById('setList');
+  wrap.innerHTML = '';
+  for (const set of WordSets.load()) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:8px 12px;';
+    const label = document.createElement('span');
+    const count = set.words.split(/[,\n]/).filter(w => w.trim()).length;
+    label.textContent = `${set.name} (${count}개)`;   // 사용자 입력 → textContent로 안전하게
+    label.style.cssText = 'flex:1; font-size:14px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+    row.appendChild(label);
+    const mkBtn = (text, cls, fn) => {
+      const b = document.createElement('button');
+      b.className = `btn mini ${cls}`;
+      b.textContent = text;
+      b.addEventListener('click', fn);
+      row.appendChild(b);
+    };
+    mkBtn('불러오기', 'sub', () => {
+      document.getElementById('setName').value = set.name;
+      customWordsInput.value = set.words;
+      localStorage.setItem('typingGameWords', set.words);   // 활성 단어장으로 지정
+    });
+    mkBtn('링크 복사', 'primary', () => showLink(buildLink(set.words)));
+    mkBtn('삭제', 'sub', () => {
+      if (!confirm(`'${set.name}' 단어장을 삭제할까요?`)) return;
+      WordSets.save(WordSets.load().filter(s => s.name !== set.name));
+      renderSetList();
+    });
+    wrap.appendChild(row);
+  }
+}
+
 document.getElementById('editBtn').addEventListener('click', () => {
   customWordsInput.value = localStorage.getItem('typingGameWords') || '';
+  renderSetList();
   wordEditor.classList.toggle('open');
 });
 
 document.getElementById('saveWordsBtn').addEventListener('click', () => {
-  localStorage.setItem('typingGameWords', customWordsInput.value);
-  alert('단어장이 저장되었어요! 이제 "내 단어장" 모드로 게임할 수 있어요.');
-  wordEditor.classList.remove('open');
+  const name = document.getElementById('setName').value.trim() || '이름 없는 단어장';
+  const raw = customWordsInput.value.trim();
+  if (!raw.split(/[,\n]/).some(w => w.trim() && !w.includes(' '))) {
+    alert('단어를 1개 이상 입력해 주세요!');
+    return;
+  }
+  const sets = WordSets.load().filter(s => s.name !== name);   // 같은 이름은 덮어쓰기
+  sets.unshift({ name, words: raw });
+  WordSets.save(sets);
+  localStorage.setItem('typingGameWords', raw);   // 방금 저장한 것이 활성 단어장
+  renderSetList();
+  alert(`'${name}' 단어장이 저장되었어요! 이제 "내 단어장" 모드로 게임할 수 있어요.`);
 });
 
 document.getElementById('retryBtn').addEventListener('click', () => {
