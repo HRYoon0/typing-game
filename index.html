@@ -112,6 +112,12 @@
   .loot-hint { color: #6b6963; font-size: 14px; }
   .loot-hint b { color: var(--ink); }
 
+  /* ── 제작자 표기 (우측 상단 고정) ── */
+  #credit {
+    position: fixed; top: 12px; right: 16px; z-index: 11;
+    font-size: 13px; color: var(--sub); letter-spacing: 0.3px;
+  }
+
   /* 실제 키 입력을 받는 숨김 input (IME 조합이 여기서 일어남) */
   #hiddenInput { position: fixed; left: -9999px; top: 0; opacity: 0; }
 </style>
@@ -119,6 +125,7 @@
 <body>
 
 <canvas id="gameCanvas"></canvas>
+<div id="credit">제작자: 경남 황산초등학교 윤희류</div>
 <input id="hiddenInput" autocomplete="off" autocapitalize="off" spellcheck="false">
 
 <!-- 시작 화면 -->
